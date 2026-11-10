@@ -5,8 +5,8 @@ import json, os, sys, time, shutil, datetime, urllib.parse, urllib.request, urll
 from pathlib import Path
 
 VER = "v27.0"
-HOSTS = ["https://graph.facebook.com", "https://graph.instagram.com"]
-API = os.environ.get("IG_API") or f"{HOSTS[0]}/{VER}"
+API = os.environ.get("IG_API") or f"https://graph.facebook.com/{VER}"
+IG_ID = os.environ.get("IG_USER_ID") or "17841462905024698"   # @manabirador
 ROOT = Path(__file__).parent
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
@@ -28,17 +28,10 @@ def call(method, path, **params):
 
 
 def probe():
-    """トークンがどちらの窓口で通るかを調べ、投稿先のアカウントを表示する(トークンは表示しない)。"""
-    tok = urllib.parse.quote(os.environ["IG_TOKEN"])
-    for h in HOSTS:
-        for path in ("me?fields=user_id,username", "me/accounts?fields=name,instagram_business_account{id,username}",
-                     "me?fields=id,name"):
-            try:
-                with urllib.request.urlopen(f"{h}/{VER}/{path}&access_token={tok}", timeout=60) as r:
-                    print("OK ", h, path.split("?")[0], json.dumps(json.load(r), ensure_ascii=False))
-            except urllib.error.HTTPError as e:
-                msg = json.loads(e.read().decode("utf-8", "replace")).get("error", {}).get("message", "")
-                print("NG ", h, path.split("?")[0], e.code, msg[:200])
+    """トークンで投稿先のアカウントに届くかを調べる(トークンは表示しない。投稿もしない)。"""
+    print("トークンの持ち主:", call("GET", "me", fields="id,name"))
+    print("投稿先:", call("GET", IG_ID, fields="username,media_count"))
+    print("24時間の投稿数:", call("GET", f"{IG_ID}/content_publishing_limit", fields="quota_usage,config"))
 
 
 def wait_ready(container_id):
@@ -80,7 +73,7 @@ def main():
         for im in images: print("  ", f"{base}/{im.name}")
         print(caption); return
 
-    ig = os.environ.get("IG_USER_ID") or call("GET", "me", fields="user_id,username")["user_id"]
+    ig = IG_ID
     if len(images) == 1:
         cid = call("POST", f"{ig}/media", image_url=f"{base}/{images[0].name}", caption=caption)["id"]
     else:
