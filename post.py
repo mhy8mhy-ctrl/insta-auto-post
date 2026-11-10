@@ -35,13 +35,13 @@ def probe():
 
 
 def wait_ready(container_id):
-    for _ in range(10):
+    for _ in range(60):
         st = call("GET", container_id, fields="status_code").get("status_code")
         if st == "FINISHED":
             return
         if st in ("ERROR", "EXPIRED"):
             sys.exit(f"コンテナ {container_id} が {st}")
-        time.sleep(30)
+        time.sleep(5)
     sys.exit(f"コンテナ {container_id} の準備が終わらない")
 
 
