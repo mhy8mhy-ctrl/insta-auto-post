@@ -4,7 +4,9 @@ queue/YYYY-MM-DD/ に 01.jpg〜 と caption.txt を置く。日付が今日(日�
 import json, os, sys, time, shutil, datetime, urllib.parse, urllib.request, urllib.error
 from pathlib import Path
 
-API = "https://graph.instagram.com/v27.0"
+VER = "v27.0"
+HOSTS = ["https://graph.facebook.com", "https://graph.instagram.com"]
+API = os.environ.get("IG_API") or f"{HOSTS[0]}/{VER}"
 ROOT = Path(__file__).parent
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
@@ -25,6 +27,20 @@ def call(method, path, **params):
         sys.exit(f"APIエラー {e.code} ({method} {path}): {body}")
 
 
+def probe():
+    """トークンがどちらの窓口で通るかを調べ、投稿先のアカウントを表示する(トークンは表示しない)。"""
+    tok = urllib.parse.quote(os.environ["IG_TOKEN"])
+    for h in HOSTS:
+        for path in ("me?fields=user_id,username", "me/accounts?fields=name,instagram_business_account{id,username}",
+                     "me?fields=id,name"):
+            try:
+                with urllib.request.urlopen(f"{h}/{VER}/{path}&access_token={tok}", timeout=60) as r:
+                    print("OK ", h, path.split("?")[0], json.dumps(json.load(r), ensure_ascii=False))
+            except urllib.error.HTTPError as e:
+                msg = json.loads(e.read().decode("utf-8", "replace")).get("error", {}).get("message", "")
+                print("NG ", h, path.split("?")[0], e.code, msg[:200])
+
+
 def wait_ready(container_id):
     for _ in range(10):
         st = call("GET", container_id, fields="status_code").get("status_code")
@@ -43,6 +59,8 @@ def pick():
 
 
 def main():
+    if os.environ.get("PROBE") == "1":
+        probe(); return
     if (ROOT / "PAUSE").exists():
         print("PAUSEファイルがあるので投稿しない"); return
     d = pick()

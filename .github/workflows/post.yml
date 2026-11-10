@@ -7,6 +7,9 @@ on:
       dry_run:
         description: "1にすると投稿せず中身だけ表示"
         default: "0"
+      probe:
+        description: "1にするとトークンの確認だけ行う"
+        default: "0"
 permissions:
   contents: write
 concurrency: insta-post
@@ -20,6 +23,8 @@ jobs:
           IG_TOKEN: ${{ secrets.IG_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           DRY_RUN: ${{ inputs.dry_run }}
+          PROBE: ${{ inputs.probe }}
+          IG_API: ${{ vars.IG_API }}
         run: python3 post.py
       - name: 投稿済みへ移した結果を保存
         run: |
