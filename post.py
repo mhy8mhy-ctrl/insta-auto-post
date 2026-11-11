@@ -10,7 +10,7 @@ IG_ID = os.environ.get("IG_USER_ID") or "17841462905024698"   # @manabirador
 ROOT = Path(__file__).parent
 JST = datetime.timezone(datetime.timedelta(hours=9))
 # 検索で見つけてもらうためのタグ(キャプションにタグがないときだけ末尾に足す)
-TAGS = "#中学受験 #中学受験算数 #中学受験生の親 #家庭学習 #算数"
+TAGS = "#中学受験 #中学受験算数 #帰国生入試 #海外子育て #家庭学習"
 
 
 def add_tags(caption):
