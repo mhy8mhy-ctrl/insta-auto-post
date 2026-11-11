@@ -1,0 +1,38 @@
+name: 毎朝のリール
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 日本時間 7:00(前の晩のカルーセルをリールにして出す)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1にすると動画だけ作って投稿しない"
+        default: "0"
+permissions:
+  contents: write
+concurrency: insta-post
+jobs:
+  reel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ffmpegを入れる
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: リール動画を作る
+        run: python3 reel.py build
+      - name: 動画を保存(投稿に公開URLが要るため)
+        run: |
+          git config user.name "insta-bot"
+          git config user.email "insta-bot@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || (git commit -m "リール動画を追加" && git push)
+      - name: リールを投稿
+        env:
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          IG_API: ${{ vars.IG_API }}
+        run: python3 reel.py post
+      - name: 記録を保存
+        run: |
+          git add -A
+          git diff --cached --quiet || (git commit -m "リール投稿を記録" && git push)

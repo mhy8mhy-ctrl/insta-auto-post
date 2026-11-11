@@ -9,6 +9,12 @@ API = os.environ.get("IG_API") or f"https://graph.facebook.com/{VER}"
 IG_ID = os.environ.get("IG_USER_ID") or "17841462905024698"   # @manabirador
 ROOT = Path(__file__).parent
 JST = datetime.timezone(datetime.timedelta(hours=9))
+# 検索で見つけてもらうためのタグ(キャプションにタグがないときだけ末尾に足す)
+TAGS = "#中学受験 #中学受験算数 #中学受験生の親 #家庭学習 #算数"
+
+
+def add_tags(caption):
+    return caption if "#" in caption else caption + "\n\n" + TAGS
 
 
 def call(method, path, **params):
@@ -60,7 +66,7 @@ def main():
     if d is None:
         print("今日までの投稿待ちはない"); return
     images = sorted(d.glob("*.jpg"))
-    caption = (d / "caption.txt").read_text(encoding="utf-8").strip()
+    caption = add_tags((d / "caption.txt").read_text(encoding="utf-8").strip())
     if not images:
         sys.exit(f"{d.name} に画像がない")
     if len(images) > 20:
