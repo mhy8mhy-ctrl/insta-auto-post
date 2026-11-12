@@ -20,8 +20,22 @@ def done_days():
     return {json.loads(l)["date"] for l in LOG.read_text(encoding="utf-8").splitlines() if l.strip()}
 
 
+NOON_MIN_QUEUE = 4   # 昼の枠は、明日以降の在庫がこれ以上あるときだけ出す
+
+
 def target():
-    days = sorted(p for p in (ROOT / "posted").iterdir() if p.is_dir())
+    if os.environ.get("REEL_SLOT") == "noon":
+        # 昼の枠(2026-11-12 フォロワー1,000人の施策):queue/ の一番先の日付を先にリールで出す。
+        # 在庫が少ない日は出さない(夜のカルーセル・朝のリールの分を食わないため)
+        import datetime
+        today = datetime.datetime.now(JST).strftime("%Y-%m-%d")
+        done = done_days()
+        future = sorted(p for p in (ROOT / "queue").iterdir() if p.is_dir() and p.name[:10] > today)
+        if len(future) < NOON_MIN_QUEUE:
+            return None
+        cand = [p for p in future if p.name not in done]
+        return cand[-1] if cand else None
+    days = sorted(p for p in (ROOT / "posted").iterdir() if p.is_dir() and not p.name.endswith("-reel"))
     if not days:
         return None
     d = days[-1]                       # 一番新しい投稿だけ。古い日はさかのぼらない
@@ -66,7 +80,8 @@ def post(d):
     caption = add_tags((d / "caption.txt").read_text(encoding="utf-8").strip())
     repo = os.environ["GITHUB_REPOSITORY"]
     ref = os.environ.get("GITHUB_REF_NAME", "main")
-    url = f"https://raw.githubusercontent.com/{repo}/{ref}/posted/{urllib.parse.quote(d.name)}/reel.mp4"
+    rel = d.relative_to(ROOT).as_posix()          # posted/日付 または queue/日付(昼の枠)
+    url = f"https://raw.githubusercontent.com/{repo}/{ref}/{urllib.parse.quote(rel)}/reel.mp4"
     if os.environ.get("DRY_RUN") == "1":
         print("投稿しない(DRY_RUN):", url); print(caption); return
     wait_url(url)
@@ -88,6 +103,9 @@ def post(d):
         f.write(json.dumps({"date": d.name, "media_id": media_id,
                             "posted_at": datetime.datetime.now(JST).isoformat(timespec="seconds")},
                            ensure_ascii=False) + "\n")
+    if d.parent.name == "queue":       # 昼の枠はリール専用。カルーセルには回さず posted/日付-reel へ移す
+        import shutil
+        shutil.move(str(d), str(ROOT / "posted" / (datetime.datetime.now(JST).strftime("%Y-%m-%d") + "-reel")))
 
 
 def main():

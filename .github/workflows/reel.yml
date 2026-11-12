@@ -2,6 +2,7 @@ name: 毎朝のリール
 on:
   schedule:
     - cron: "0 22 * * *"   # 日本時間 7:00(前の晩のカルーセルをリールにして出す)
+    - cron: "0 3 * * *"    # 日本時間 12:00 昼の枠(queue/の先の日付をリール専用で出す。在庫4本未満なら出さない)
   workflow_dispatch:
     inputs:
       dry_run:
@@ -10,6 +11,8 @@ on:
 permissions:
   contents: write
 concurrency: insta-post
+env:
+  REEL_SLOT: ${{ github.event.schedule == '0 3 * * *' && 'noon' || 'morning' }}
 jobs:
   reel:
     runs-on: ubuntu-latest
