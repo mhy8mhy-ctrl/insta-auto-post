@@ -13,7 +13,20 @@ JST = datetime.timezone(datetime.timedelta(hours=9))
 TAGS = "#中学受験 #中学受験算数 #帰国生入試 #海外子育て #家庭学習"
 
 
+# 反応(保存・コメント・フォロー)を呼ぶ一言。2026-11-14追加：28日でリーチ221・反応0だったため
+CTA = "役に立ったら保存して、あとで見返してください。\nフォローすると、毎晩21時に中学受験算数の家庭での教え方が届きます。"
+
+def add_cta(caption):
+    if "保存" in caption and "フォロー" in caption:
+        return caption
+    key = "くわしい話はプロフィールのリンクから"
+    if key in caption:
+        return caption.replace(key, CTA + "\n\n" + key, 1)
+    i = caption.find("\n#")
+    return caption + "\n\n" + CTA if i < 0 else caption[:i].rstrip() + "\n\n" + CTA + "\n\n" + caption[i:].lstrip()
+
 def add_tags(caption):
+    caption = add_cta(caption)
     return caption if "#" in caption else caption + "\n\n" + TAGS
 
 
