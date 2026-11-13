@@ -46,6 +46,9 @@ def build(d):
     imgs = sorted(d.glob("*.jpg"))
     if not imgs:
         sys.exit(f"{d.name} に画像がない")
+    end = ROOT / "assets" / "end_card.jpg"   # 最後にフォローを呼びかける1枚(2026-11-13 追加、見た人をプロフィールへ)
+    if end.exists():
+        imgs.append(end)
     args, parts = ["ffmpeg", "-y", "-loglevel", "error"], []
     for i, im in enumerate(imgs):
         args += ["-loop", "1", "-t", str(SEC_FIRST if i == 0 else SEC_EACH), "-i", str(im)]
