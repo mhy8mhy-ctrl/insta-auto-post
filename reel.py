@@ -111,9 +111,23 @@ def post(d):
         shutil.move(str(d), str(ROOT / "posted" / (datetime.datetime.now(JST).strftime("%Y-%m-%d") + "-reel")))
 
 
+def recently_posted(minutes):
+    """直近 minutes 分にリールを出していれば True(予備の予約で二重に出さないため)"""
+    import datetime
+    if not LOG.exists():
+        return False
+    lines = [l for l in LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if not lines:
+        return False
+    last = datetime.datetime.fromisoformat(json.loads(lines[-1])["posted_at"])
+    return datetime.datetime.now(JST) - last < datetime.timedelta(minutes=minutes)
+
+
 def main():
     if (ROOT / "PAUSE").exists():
         print("PAUSEファイルがあるので何もしない"); return
+    if os.environ.get("GITHUB_EVENT_NAME") == "schedule" and recently_posted(90):
+        print("直近90分にリールを出したので、今回は何もしない"); return
     d = target()
     if d is None:
         print("リールにする新しい投稿はない"); return

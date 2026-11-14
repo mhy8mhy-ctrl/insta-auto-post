@@ -70,9 +70,23 @@ def pick():
     return days[0] if days else None
 
 
+def recently_posted(hours):
+    """直近 hours 時間にカルーセルを出していれば True(予備の予約で二重に出さないため)"""
+    log = ROOT / "posted" / "log.jsonl"
+    if not log.exists():
+        return False
+    lines = [l for l in log.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if not lines:
+        return False
+    last = datetime.datetime.fromisoformat(json.loads(lines[-1])["posted_at"])
+    return datetime.datetime.now(JST) - last < datetime.timedelta(hours=hours)
+
+
 def main():
     if os.environ.get("PROBE") == "1":
         probe(); return
+    if os.environ.get("GITHUB_EVENT_NAME") == "schedule" and recently_posted(12):
+        print("直近12時間に投稿済みなので、今回は何もしない"); return
     if (ROOT / "PAUSE").exists():
         print("PAUSEファイルがあるので投稿しない"); return
     d = pick()
