@@ -24,6 +24,19 @@ NOON_MIN_QUEUE = 4   # 昼の枠は、明日以降の在庫がこれ以上ある
 
 
 def target():
+    if os.environ.get("REEL_SLOT") == "evening":
+        # 夕方の枠(2026-11-15 大将決定：カルーセルはビューがほぼ0のため、21時の枠もリールに)
+        # queue/ の今日までで一番古い1本をリールで出す
+        import datetime
+        today = datetime.datetime.now(JST).strftime("%Y-%m-%d")
+        done = done_days()
+        days = sorted(p for p in (ROOT / "queue").iterdir()
+                      if p.is_dir() and p.name[:10] <= today and p.name not in done)
+        if days:
+            return days[0]
+        # 切り替え直後の分：最後に出したカルーセルがまだリールになっていなければ、それを出す
+        posted = sorted(p for p in (ROOT / "posted").iterdir() if p.is_dir() and not p.name.endswith("-reel"))
+        return posted[-1] if posted and posted[-1].name not in done else None
     if os.environ.get("REEL_SLOT") == "noon":
         # 昼の枠(2026-11-12 フォロワー1,000人の施策):queue/ の一番先の日付を先にリールで出す。
         # 在庫が少ない日は出さない(夜のカルーセル・朝のリールの分を食わないため)
@@ -104,30 +117,42 @@ def post(d):
     import datetime
     with open(LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps({"date": d.name, "media_id": media_id,
+                            "slot": os.environ.get("REEL_SLOT", "morning"),
                             "posted_at": datetime.datetime.now(JST).isoformat(timespec="seconds")},
                            ensure_ascii=False) + "\n")
-    if d.parent.name == "queue":       # 昼の枠はリール専用。カルーセルには回さず posted/日付-reel へ移す
+    if d.parent.name == "queue" and os.environ.get("REEL_SLOT") == "evening":
+        import shutil                  # 夕方の枠：posted/日付 へ移す(朝の枠は reels.jsonl に記録済みなので二重に出さない)
+        shutil.move(str(d), str(ROOT / "posted" / d.name))
+    elif d.parent.name == "queue":     # 昼の枠はリール専用。カルーセルには回さず posted/日付-reel へ移す
         import shutil
         shutil.move(str(d), str(ROOT / "posted" / (datetime.datetime.now(JST).strftime("%Y-%m-%d") + "-reel")))
 
 
-def recently_posted(minutes):
-    """直近 minutes 分にリールを出していれば True(予備の予約で二重に出さないため)"""
+def recently_posted(minutes, slot=None):
+    """直近 minutes 分にリールを出していれば True(予備の予約で二重に出さないため)。
+    slot を渡すと、その枠で出した分だけを見る"""
     import datetime
     if not LOG.exists():
         return False
-    lines = [l for l in LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
-    if not lines:
+    rows = [json.loads(l) for l in LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if slot:
+        rows = [r for r in rows if r.get("slot") == slot]
+    if not rows:
         return False
-    last = datetime.datetime.fromisoformat(json.loads(lines[-1])["posted_at"])
+    last = datetime.datetime.fromisoformat(rows[-1]["posted_at"])
     return datetime.datetime.now(JST) - last < datetime.timedelta(minutes=minutes)
 
 
 def main():
     if (ROOT / "PAUSE").exists():
         print("PAUSEファイルがあるので何もしない"); return
-    if os.environ.get("GITHUB_EVENT_NAME") == "schedule" and recently_posted(90):
-        print("直近90分にリールを出したので、今回は何もしない"); return
+    slot = os.environ.get("REEL_SLOT", "morning")
+    if os.environ.get("GITHUB_EVENT_NAME") == "schedule":
+        # 夕方・昼は予約が数時間遅れるため、同じ枠で12時間以内に出していれば予備は何もしない
+        if slot in ("evening", "noon") and recently_posted(12 * 60, slot):
+            print(f"{slot}の枠は直近12時間に出したので、今回は何もしない"); return
+        if recently_posted(90):
+            print("直近90分にリールを出したので、今回は何もしない"); return
     d = target()
     if d is None:
         print("リールにする新しい投稿はない"); return

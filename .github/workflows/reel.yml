@@ -1,21 +1,25 @@
-name: 毎朝のリール
+name: 毎日のリール
 on:
   schedule:
-    # 2026-11-14：毎正時を避けて半端な分にずらし、各枠に予備を1回足す(直近90分にリールを出していたら何もしない)
-    - cron: "47 21 * * *"  # 日本時間 6:47 朝の枠(前の晩のカルーセルをリールにして出す)
-    - cron: "19 23 * * *"  # 日本時間 8:19 朝の枠の予備
-    - cron: "37 2 * * *"   # 日本時間 11:37 昼の枠(queue/の先の日付をリール専用で出す。在庫4本未満なら出さない)
-    - cron: "11 4 * * *"   # 日本時間 13:11 昼の枠の予備
+    # 2026-11-15 大将決定：カルーセルはビューがほぼ0 → 夜の枠もリールに(朝の枠は前夜カルーセルの動画化なので停止)。
+    # GitHubの定時実行が5〜8時間遅れる(11/15実測：昼11:37→18:51、夜20:41→翌2:59)ため、ねらいの時刻より約5時間早く予約する。予備は同じ枠で12時間以内に出していれば何もしない
+    - cron: "7 22 * * *"   # 日本時間 7:07 昼の枠(ねらい12時ごろ。queue/の先の日付をリール専用で出す。在庫4本未満なら出さない)
+    - cron: "41 23 * * *"  # 日本時間 8:41 昼の枠の予備
+    - cron: "41 6 * * *"   # 日本時間 15:41 夕方の枠(ねらい21時ごろ。queue/の今日の1本をリールで出す)
+    - cron: "13 8 * * *"   # 日本時間 17:13 夕方の枠の予備
   workflow_dispatch:
     inputs:
       dry_run:
         description: "1にすると動画だけ作って投稿しない"
         default: "0"
+      slot:
+        description: "手動で出すときの枠(evening/noon/morning)"
+        default: "evening"
 permissions:
   contents: write
 concurrency: insta-post
 env:
-  REEL_SLOT: ${{ (github.event.schedule == '37 2 * * *' || github.event.schedule == '11 4 * * *') && 'noon' || 'morning' }}
+  REEL_SLOT: ${{ (github.event.schedule == '7 22 * * *' || github.event.schedule == '41 23 * * *') && 'noon' || ((github.event.schedule == '41 6 * * *' || github.event.schedule == '13 8 * * *') && 'evening' || (inputs.slot || 'evening')) }}
 jobs:
   reel:
     runs-on: ubuntu-latest
