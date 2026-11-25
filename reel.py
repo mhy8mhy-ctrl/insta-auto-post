@@ -30,8 +30,10 @@ def target():
         import datetime
         today = datetime.datetime.now(JST).strftime("%Y-%m-%d")
         done = done_days()
+        # queue/ に残っているものは未投稿(出したら posted/ へ移すため)。日付名で投稿済みを判定しない
+        # (2026-11-25 修正：補充分の日付が、昼の枠で先に出した日付と重なり、11/22から何も出なくなった)
         days = sorted(p for p in (ROOT / "queue").iterdir()
-                      if p.is_dir() and p.name[:10] <= today and p.name not in done)
+                      if p.is_dir() and p.name[:10] <= today)
         if days:
             return days[0]
         # 切り替え直後の分：最後に出したカルーセルがまだリールになっていなければ、それを出す
@@ -46,8 +48,7 @@ def target():
         future = sorted(p for p in (ROOT / "queue").iterdir() if p.is_dir() and p.name[:10] > today)
         if len(future) < NOON_MIN_QUEUE:
             return None
-        cand = [p for p in future if p.name not in done]
-        return cand[-1] if cand else None
+        return future[-1]              # queue/ に残っているものは未投稿(日付名では判定しない)
     days = sorted(p for p in (ROOT / "posted").iterdir() if p.is_dir() and not p.name.endswith("-reel"))
     if not days:
         return None
@@ -122,10 +123,17 @@ def post(d):
                            ensure_ascii=False) + "\n")
     if d.parent.name == "queue" and os.environ.get("REEL_SLOT") == "evening":
         import shutil                  # 夕方の枠：posted/日付 へ移す(朝の枠は reels.jsonl に記録済みなので二重に出さない)
-        shutil.move(str(d), str(ROOT / "posted" / d.name))
+        dst = ROOT / "posted" / d.name
+        if dst.exists():
+            dst = ROOT / "posted" / (d.name + "-b")
+        shutil.move(str(d), str(dst))
     elif d.parent.name == "queue":     # 昼の枠はリール専用。カルーセルには回さず posted/日付-reel へ移す
         import shutil
-        shutil.move(str(d), str(ROOT / "posted" / (datetime.datetime.now(JST).strftime("%Y-%m-%d") + "-reel")))
+        dst = ROOT / "posted" / (datetime.datetime.now(JST).strftime("%Y-%m-%d") + "-reel")
+        n = 2
+        while dst.exists():            # 同じ日に2本目を出したときに、前のフォルダの中へ入れてしまわない
+            dst = ROOT / "posted" / (datetime.datetime.now(JST).strftime("%Y-%m-%d") + f"-reel{n}"); n += 1
+        shutil.move(str(d), str(dst))
 
 
 def recently_posted(minutes, slot=None):
@@ -143,6 +151,25 @@ def recently_posted(minutes, slot=None):
     return datetime.datetime.now(JST) - last < datetime.timedelta(minutes=minutes)
 
 
+STALL_HOURS = 40   # これ以上リールが出ていなければ、実行を「失敗」にして知らせる
+
+
+def stalled():
+    """出すものがないまま長く止まっていたら、成功表示のまま黙らずに失敗で終わる
+    (2026-11-25 追加：11/22から3日間、成功表示のまま何も出ていなかった)"""
+    import datetime
+    if os.environ.get("GITHUB_EVENT_NAME") != "schedule" or not LOG.exists():
+        return
+    rows = [json.loads(l) for l in LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if not rows:
+        return
+    last = datetime.datetime.fromisoformat(rows[-1]["posted_at"])
+    hours = (datetime.datetime.now(JST) - last).total_seconds() / 3600
+    if hours > STALL_HOURS:
+        n = sum(1 for p in (ROOT / "queue").iterdir() if p.is_dir())
+        sys.exit(f"リールが {hours:.0f} 時間出ていない(queue の在庫 {n} 本)。在庫切れか、選び方の不具合")
+
+
 def main():
     if (ROOT / "PAUSE").exists():
         print("PAUSEファイルがあるので何もしない"); return
@@ -155,7 +182,7 @@ def main():
             print("直近90分にリールを出したので、今回は何もしない"); return
     d = target()
     if d is None:
-        print("リールにする新しい投稿はない"); return
+        stalled(); print("リールにする新しい投稿はない"); return
     {"build": build, "post": post}[sys.argv[1]](d)
 
 
